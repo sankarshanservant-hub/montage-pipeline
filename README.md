@@ -15,7 +15,7 @@
 > ремейк чужого шортса по ссылке → Stage 2R.
 
 ## Стек
-Python 3.11 (`.venv`) · Remotion 4 (Node 22) · FFmpeg · Deepgram API ·
+Python 3.11 (`.venv`) · Remotion 4 (Node 22) · FFmpeg · Whisper (локально, бесплатно) · yt-dlp ·
 TypeScript 5.9.3 · zod 4.3.6 · mediapipe 0.10.21
 
 ## Как это работает
@@ -26,7 +26,7 @@ TypeScript 5.9.3 · zod 4.3.6 · mediapipe 0.10.21
 исходник.mov
    │  ffmpeg → audio.wav (16 кГц моно)
    ▼
-transcribe.py ─ Deepgram ─→ words.json · transcript.txt · utterances.txt
+transcribe.py ─ Whisper ─→ words.json · transcript.txt · utterances.txt
    │  indexed.py → indexed.txt
    ▼
 Claude → delete.json (вырезать паузы/дубли/паразиты)
@@ -54,15 +54,30 @@ publish-pack → publish.md (описание YouTube · таймкоды · т�
 
 ## Быстрый старт
 
+Платных сервисов не требуется: речь распознаёт локальный Whisper, ролики по ссылке качает yt-dlp.
+Deepgram, ScrapeCreators и Apify — необязательные платные варианты, включаются ключами в `.env`.
+
+**Mac / Linux:**
+
+```bash
+brew install python@3.11 node@22 ffmpeg          # Mac; на Linux — пакетным менеджером
+python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/pip install mlx-whisper                # только Mac с M-чипом — ускоряет распознавание
+cd remotion && npm install && npx remotion studio
+```
+
+**Windows:**
+
 ```powershell
 # 1. Python-окружение
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 
-# 2. Ключи (не коммитятся) — .env:
-#    DEEPGRAM_API_KEY=...           # транскрипция (обязателен)
-#    SCRAPECREATORS_API_KEY=...     # ремейк шортсов по ссылке (опционально)
-#    APIFY_TOKEN=...                # фолбэк-загрузчик референсов (опционально)
+# 2. Настройки (не коммитятся, всё необязательно) — .env:
+#    WHISPER_PROMPT=Имена, термины   # подсказка распознаванию
+#    YTDLP_COOKIES_BROWSER=chrome    # если Instagram/YouTube просит вход
+#    DEEPGRAM_API_KEY=...            # платная транскрипция вместо Whisper (+ TRANSCRIBE_ENGINE=deepgram)
+#    SCRAPECREATORS_API_KEY=... / APIFY_TOKEN=...   # платные запасные загрузчики
 
 # 3. Remotion
 cd remotion && npm install

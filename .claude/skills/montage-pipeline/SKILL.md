@@ -36,10 +36,10 @@ Stage 1 (тот же `<id>`; маркеры наследует `broll-gen` на 
 
 **Stage 1 — Ingest + analysis (Python, `.venv`).** Full command list in `docs/PIPELINE.md`:
 1. `ffmpeg … audio.wav` (16 kHz mono) — analysis audio.
-2. `transcribe.py` (Deepgram, key from `.env`) → `words.json`, `transcript.txt`, `utterances.txt`.
+2. `transcribe.py` (local Whisper, free, no key; `--prompt` with the author's names/terms; Deepgram only if the user set it up) → `words.json`, `transcript.txt`, `utterances.txt`.
 3. `indexed.py` → `indexed.txt` (compact view for markup).
 4. **Claude** reads `utterances.txt` + `indexed.txt`, writes `delete.json` (cut fillers/dupes —
-   Deepgram filler_words is unreliable for Russian, so Claude does it).
+   ASR doesn't mark Russian fillers reliably, so Claude does it).
 5. `edl.py` → `edl.json` (segments + frames). Never hand-edit; always via `delete.json`.
 6. `review.py` → `REVIEW.md`. **Mandatory review point** — show the user, wait for OK.
 7. `faces.py` → `faces.json` (face position every 5 s).
@@ -58,7 +58,7 @@ MCP; **pre-flight обязателен** — авторизация мертва
 **Stage 2 — Shorts (optional, or the whole point in shorts-only mode).** Pick moments
 (Claude proposes: хуки, цифры, панчи — user approves) → `work/<id>/shorts.json`, then
 `shorts.py work\<id> remotion\props` (+ `draft` first для вычитки слов) → `props/<id>.json`,
-then `audio.py` per short. Subtitle text is hand-cleaned in `shorts.json` (Deepgram lies on
+then `audio.py` per short. Subtitle text is hand-cleaned in `shorts.json` (ASR lies on
 numbers/words). Вставки шортсов поддерживают `layout` в `inserts.json`: `third` (верхняя
 треть, default) / `half` (полэкрана) / `full` (перекрывает спикера, голос продолжается);
 `shorts.json` может задавать `media` — базовое имя записи в public (default `source`).
@@ -72,13 +72,14 @@ Stage 3 (Studio) и Stage 4 (render `Short-*` по явной команде).
 
 **Stage 2R — Shorts remake (переделать чужой шортс под автора).**
 1. Пользователь даёт ссылку (YouTube Shorts / TikTok / Reels) или готовый mp4. Ссылка →
-   `download.py <url> work\<id>` → `work/<id>/ref_source.mp4` (ScrapeCreators первым,
-   при ошибке Apify; YouTube — только Apify; ключи `SCRAPECREATORS_API_KEY`/`APIFY_TOKEN`
-   в `.env`, нет ключей — попросить у пользователя, не ретраить). Дальше
+   `download.py <url> work\<id>` → `work/<id>/ref_source.mp4` (бесплатный yt-dlp
+   первым; платные ScrapeCreators/Apify — только если ключи уже есть в `.env`, сами их не
+   предлагать. Просит вход — попросить `YTDLP_COOKIES_BROWSER=safari|chrome` в `.env`; сломался —
+   `pip install -U yt-dlp`; не ретраить). Дальше
    `reference.py <mp4> work\<id> [0.25]`: mediapipe-лицо
    с шагом 0.25 с + ffmpeg-сцены → сегменты «автор в кадре» / «визуализация»; визуал
    режется в `public/inserts/<id>/ref_NN.mp4` (all-intra, без звука) + миниатюра
-   `work/<id>/ref/thumb_NN.jpg` на каждый фрагмент; текст — Deepgram (опционально).
+   `work/<id>/ref/thumb_NN.jpg` на каждый фрагмент; текст — тот же Whisper (`transcribe.py`).
    Выход: `work/<id>/ref.json` + `ref_plan.md` (таймлайн + раскладки). **Прочитай
    миниатюры глазами** (Read): вшитые субтитры/вотермарки → зона `coverBox {x,y,w,h}`
    (0..1 от области вставки) в `inserts.json` — Shorts916 закроет её блюр-плитой, твоё

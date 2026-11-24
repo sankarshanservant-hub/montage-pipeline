@@ -4,6 +4,9 @@
 mediapipe==0.10.21        # лицо/лендмарки; 0.10.21 пиннится — новее нет .solutions
 numpy==1.26.4
 opencv-python==4.10.0.84  # cv2 — кадры для faces.py
-python-dotenv==1.2.2      # .env → DEEPGRAM_API_KEY
-requests==2.34.2          # Deepgram REST + загрузки
+python-dotenv==1.2.2      # .env → настройки и необязательные ключи
+requests==2.34.2          # загрузки + запасные платные API (Deepgram/Apify), если есть ключи
 soundfile==0.14.0         # declick-дорожка (audio.py)
+faster-whisper==1.2.1     # транскрибация локально, бесплатно (Whisper large-v3-turbo + Silero VAD)
+yt-dlp>=2026.11.23        # скачивание референсов по ссылке, бесплатно; держать свежим: pip install -U yt-dlp
+# Mac с M-чипом, в 5–10 раз быстрее (необязательно): .venv/bin/pip install mlx-whisper

@@ -18,9 +18,10 @@
 # 1. Аудио для анализа (16 кГц моно WAV)
 ffmpeg -y -i "<видео>" -vn -ac 1 -ar 16000 -c:a pcm_s16le work\<id>\audio.wav
 
-# 2. Транскрибация (Deepgram nova-3, ключ из .env)
+# 2. Транскрибация — локальный Whisper, бесплатно, без ключей (подробно — раздел «Транскрибация»)
 ...python.exe pipeline\transcribe.py work\<id>\audio.wav work\<id> ru
-#    -> deepgram_raw.json, words.json, transcript.txt, utterances.txt
+#    [--prompt "Имена, термины"] [--model large-v3-turbo] [--engine auto|faster-whisper|mlx|deepgram]
+#    -> faster_whisper_raw.json (или mlx_raw / deepgram_raw), words.json, transcript.txt, utterances.txt
 
 # 3. Компактный вид для LLM-разметки
 ...python.exe pipeline\indexed.py work\<id>        # -> indexed.txt ("i:слово", 12 на строку)
@@ -87,20 +88,29 @@ ffmpeg -y -i work\<id>\animate\NN_slug.mp4 -vf "delogo=x=1700:y=852:w=90:h=92" -
 В `inserts.json` у вставки `file`: `.png` → `.mp4` (якоря те же; mp4 обрезается по своей
 длине). После любых правок вставок: `props.py …` → **`audio.py …`**.
 
+**Бесплатно, без подписок.** Картинки: `gemini-webapi` работает через обычный аккаунт Google
+(бесплатный лимит Gemini, неофициальный доступ по куки браузера — может отвалиться); полностью
+бесплатно и локально — `imagegen.provider: manual` + генерация на своём компьютере
+(Mac: приложение Draw Things, модели FLUX.1 schnell / SDXL; Windows/Linux с видеокартой: ComfyUI),
+готовые PNG — в `remotion/public/inserts/<id>/`. Оживление: Veo/Kling платные (у Kling есть
+небольшой бесплатный дневной лимит); бесплатно — `imagegen.animate: off`, картинки остаются
+статичными. Локальные видеомодели (Wan 2.x в ComfyUI) требуют мощную видеокарту NVIDIA.
+
 ## Ремейк чужого шортса (Stage 2R, скилл montage-pipeline + script-gen)
 
 ```powershell
-# скачивание референса по ссылке (YT Shorts / TikTok / Reels): ScrapeCreators -> фолбэк Apify
+# скачивание референса по ссылке (YT Shorts / TikTok / Reels): yt-dlp (бесплатно) -> платные фолбэки ScrapeCreators/Apify, если есть ключи
 E:\Montage\.venv\Scripts\python.exe pipeline\download.py "<url>" work\<id>
-#   -> work/<id>/ref_source.mp4; ключи SCRAPECREATORS_API_KEY / APIFY_TOKEN в .env
-#   --provider scrapecreators|apify — форс провайдера (тест фолбэка); YouTube только Apify
+#   -> work/<id>/ref_source.mp4; ключи не нужны. Просит вход (Instagram, иногда YouTube) —
+#   YTDLP_COOKIES_BROWSER=safari|chrome в .env (войти на сайте в этом браузере); сломалось — pip install -U yt-dlp
+#   --provider ytdlp|scrapecreators|apify — форс провайдера (платные — только с ключами в .env)
 # разбор референса: лицо (mediapipe, шаг 0.25с) + сцены (ffmpeg scdet) -> сегменты автор/визуал
 E:\Montage\.venv\Scripts\python.exe pipeline\reference.py "<референс.mp4>" work\<id> 0.25
 #   -> work/<id>/ref.json (сегменты: тип/тайминги/файл/текст, раскладка-предложение)
 #   -> work/<id>/ref_plan.md (таймлайн для ревью)
 #   -> remotion/public/inserts/<id>/ref_NN.mp4 (визуал-фрагменты, all-intra, без звука)
 #   -> work/<id>/ref/thumb_NN.jpg (миниатюра фрагмента — Claude по ней метит вшитые субтитры)
-#   -> work/<id>/ref/ (words.json транскрипта референса; пропускается без DEEPGRAM_API_KEY)
+#   -> work/<id>/ref/ (words.json транскрипта референса — тем же transcribe.py; при ошибке пропускается)
 ```
 
 Вшитые субтитры референса: по миниатюрам размечается `coverBox {x,y,w,h}` (0..1 от области
@@ -144,7 +154,7 @@ shorts-only маршрутом (в `shorts.json` поле `media` = имя за�
    оставленные слова не обрезаются никогда.
 2. **Сжатие пауз**: паузы между оставленными словами > 0.35 с → ~0.22 с
    (0.12 хвост + 0.10 голова). Динамику монтажа регулировать здесь (MAX_PAUSE_S / KEEP_TAIL_S / KEEP_HEAD_S).
-   Это же режет зажёванные «эээ» — Deepgram по-русски их отдельным словом не пишет, они сидят в разрыве и уходят с серединой паузы.
+   Это же режет зажёванные «эээ» — распознавалка по-русски их отдельным словом обычно не пишет, они сидят в разрыве и уходят с серединой паузы.
 3. **Голова/хвост**: тишина до первого слова → 0.3 с, после последнего → 0.8 с.
 4. Сегменты короче 0.15 с выбрасываются, зазоры < 40 мс сливаются.
 
@@ -164,8 +174,20 @@ shorts-only маршрутом (в `shorts.json` поле `media` = имя за�
 - Обращение к зрителю на «вы» (брендбук) — при выборе версии дубля предпочитать «вы».
 - Всё вырезанное — в REVIEW.md с причиной; рендерить только после утверждения.
 
-## Deepgram
+## Транскрибация
 
-- nova-3, language=ru, smart_format+punctuate+utterances. ~$0.0043–0.0077/мин, на аккаунте $200 кредитов.
-- filler_words работает только для английского — для русского паразиты приходят как обычные слова.
-- Ключ: `.env` → DEEPGRAM_API_KEY (при утечке — перевыпустить в консоли Deepgram).
+- **По умолчанию — локальный Whisper** (`faster-whisper`, модель `large-v3-turbo`): бесплатно, без ключей,
+  звук не уходит с компьютера. Первый запуск скачивает модель (~1,6 ГБ) в кэш Hugging Face.
+  Скорость на CPU — примерно реальное время; на Mac с M-чипом поставь `mlx-whisper`
+  (`.venv/bin/pip install mlx-whisper`) — `--engine auto` возьмёт его сам, в 5–10 раз быстрее.
+- Настройки (аргументы или `.env`): `--model`/`WHISPER_MODEL` (`large-v3-turbo` · `large-v3` — точнее и вдвое
+  медленнее · `medium`/`small` — для слабых машин), `--prompt`/`WHISPER_PROMPT` — подсказка с именами и
+  терминами (Whisper пишет их так, как в подсказке), `WHISPER_DEVICE=cuda` — видеокарта NVIDIA.
+- **Таймкоды слов**: у Whisper края слов у пауз плавают на 0,2–0,4 с, поэтому `transcribe.py` подтягивает их
+  к речи по Silero VAD (встроен в faster-whisper; в логе `snap: N word edges moved`). Дальше `edl.py`
+  ещё уточняет склейки по минимуму энергии (±150 мс). Склейку всё равно слушать в Studio.
+- Whisper сглаживает речь: «эээ», «ммм» и часть оговорок обычно не пишет (они уходят в паузы и режутся
+  сжатием пауз), иногда склеивает два слова в одно — сверять по `utterances.txt`. Паразиты и дубли
+  размечает Claude в `delete.json`, как и раньше.
+- **Deepgram — по желанию** (платно, ~$0.0043–0.0077/мин; точнее по таймкодам и быстрее на слабых машинах):
+  `--engine deepgram` или `TRANSCRIBE_ENGINE=deepgram` + `DEEPGRAM_API_KEY` в `.env`. Формат `words.json` одинаковый.

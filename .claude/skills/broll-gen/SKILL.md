@@ -25,7 +25,7 @@ edits `edl.json`/props by hand and never renders. After it finishes, the normal 
 **Anchor source, in priority order:**
 1. **`work/<id>/script.md` markers** (video was scripted via `script-gen`): for each
    `[ВСТАВКА: …]` find the sentence right after it in the script, locate the same phrase in
-   `words.json` (fuzzy match — Deepgram mangles numbers/words), take its word indices →
+   `words.json` (fuzzy match — ASR mangles numbers/words), take its word indices →
    `anchorWord` = first word of the phrase, `endWord` ≈ anchor + 15–40 words (по смыслу фразы).
 2. **No script** — pick anchors from `transcript.txt`: concrete nouns/objects/metaphors the
    viewer can *see* (not abstract connectives). Density from `brand.config.json →
@@ -124,4 +124,4 @@ references». Папка пуста/нет — генерить только п�
 - `~/Pictures/gemini/` — папка `Pictures\gemini` в профиле пользователя Windows.
 - `remotion/public/inserts/` под несколько видео — всегда подпапка `<id>/`, в inserts.json
   путь `<id>/файл` (ролики делят префиксы `01_…`).
-- Deepgram врёт числа/имена — матчить якоря по нескольким соседним словам, не по одному.
+- Распознавалка врёт числа/имена — матчить якоря по нескольким соседним словам, не по одному.

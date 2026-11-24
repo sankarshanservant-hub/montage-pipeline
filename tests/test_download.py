@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Смоук download.py: платформы, порядок провайдеров, извлечение URL из фикстур. Без сети.
 
-Run: E:\Montage\.venv\Scripts\python.exe tests\test_download.py
+Run: .venv/bin/python tests/test_download.py  (Windows: .venv\\Scripts\\python.exe tests\\test_download.py)
 """
 import sys
 from pathlib import Path
@@ -21,10 +21,10 @@ try:
 except ValueError:
     pass
 
-# --- порядок провайдеров (спека: SC первым, Apify фолбэк; YouTube — только Apify) ---
-assert [n for n, _ in d.REGISTRY["tiktok"]] == ["scrapecreators", "apify"]
-assert [n for n, _ in d.REGISTRY["instagram"]] == ["scrapecreators", "apify"]
-assert [n for n, _ in d.REGISTRY["youtube"]] == ["apify", "apify"]
+# --- порядок провайдеров (бесплатный yt-dlp первым, платные SC/Apify — запасные) ---
+assert [n for n, _ in d.REGISTRY["tiktok"]] == ["ytdlp", "scrapecreators", "apify"]
+assert [n for n, _ in d.REGISTRY["instagram"]] == ["ytdlp", "scrapecreators", "apify"]
+assert [n for n, _ in d.REGISTRY["youtube"]] == ["ytdlp", "apify", "apify"]
 
 # --- извлечение URL (фикстуры повторяют структуры из доков провайдеров) ---
 assert d.extract_sc_tiktok({"aweme_detail": {"video": {

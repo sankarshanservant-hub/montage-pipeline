@@ -9,7 +9,7 @@ metadata:
 
 Last step of the montage pipeline, after the final render. Take the video's transcript
 (already produced by `pipeline/transcribe.py` → `work/<id>/transcript.txt`) and write
-publish-ready copy. **Do not re-transcribe** — the Deepgram transcript already exists.
+publish-ready copy. **Do not re-transcribe** — the transcript already exists.
 **Do not render or touch the montage.**
 
 ## Inputs

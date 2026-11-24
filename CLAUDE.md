@@ -8,13 +8,13 @@
 Ничего не рендерить и не пушить без явной команды пользователя.
 
 ## Что это
-Автоматический монтаж «говорящей головы»: Python анализирует видео (транскрипт, дубли, лицо), Claude размечает вырезки и акценты, Remotion рендерит финал одним проходом (jump-cut, зумы на лицо, акцентные слова с эффектом печати). Стек: Python 3.11 (.venv) + Remotion 4 (Node 22) + FFmpeg + Deepgram API. Проект мультивидео: несколько роликов = несколько композиций Main169* с отдельными пропсами.
+Автоматический монтаж «говорящей головы»: Python анализирует видео (транскрипт, дубли, лицо), Claude размечает вырезки и акценты, Remotion рендерит финал одним проходом (jump-cut, зумы на лицо, акцентные слова с эффектом печати). Стек: Python 3.11 (.venv) + Remotion 4 (Node 22) + FFmpeg + Whisper (локально, `faster-whisper`/`mlx-whisper`; Deepgram — по желанию) + yt-dlp. Проект мультивидео: несколько роликов = несколько композиций Main169* с отдельными пропсами.
 
 ## Первый запуск
 Новый пользователь / новый бренд — сначала скилл **`brand-intake`**: опрашивает по бренду, шрифтам, эффектам (визуальным Remotion), звуковым эффектам, стилю монтажа, вставкам и генерации изображений (`imagegen`: провайдер / референсы стиля / оживление), пишет `brand.config.json`. Сценарий до съёмки — скилл **`script-gen`** (Stage 0.5): `work/<id>/script.md` с маркерами вставок. Фабрика картинок — скилл **`broll-gen`** (Stage 1.5): промты → генерация (провайдер из `brand.config.json`, референсы из `assets/style-refs/`) → `public/inserts/<id>/` + `inserts.json` → опционально оживление (motion-промты + подхват mp4 c delogo и all-intra прокси).
 
 ## Карта
-- `pipeline/` — Python-скрипты анализа (transcribe → indexed → edl → review → faces → props → audio). Шортсы: shorts.py (work/<id>/shorts.json → props/<id>.json + audio.py на шорт; `media` в shorts.json = имя записи в public, default source; вставки с `layout`: third/half/full). Ремейк: download.py (референс по ссылке YT/TT/IG: ScrapeCreators → фолбэк Apify) + reference.py (разбор чужого шортса: mediapipe 0.25с + сцены → сегменты автор/визуал → public/inserts/<id>/ref_NN.mp4 + work/<id>/ref.json + ref_plan.md + миниатюры ref/thumb_NN.jpg; вшитые субтитры референса метятся по миниатюрам → `coverBox` вставки, закрывается блюр-плитой под караоке автора)
+- `pipeline/` — Python-скрипты анализа (transcribe → indexed → edl → review → faces → props → audio). Шортсы: shorts.py (work/<id>/shorts.json → props/<id>.json + audio.py на шорт; `media` в shorts.json = имя записи в public, default source; вставки с `layout`: third/half/full). Ремейк: download.py (референс по ссылке YT/TT/IG: yt-dlp → платные фолбэки ScrapeCreators/Apify, если есть ключи) + reference.py (разбор чужого шортса: mediapipe 0.25с + сцены → сегменты автор/визуал → public/inserts/<id>/ref_NN.mp4 + work/<id>/ref.json + ref_plan.md + миниатюры ref/thumb_NN.jpg; вшитые субтитры референса метятся по миниатюрам → `coverBox` вставки, закрывается блюр-плитой под караоке автора)
 - `remotion/` — Node-проект Remotion; `src/Main169.tsx` (16:9), `src/Shorts916.tsx` (9:16 вертикаль, кроп на лицо + караоке-субтитры), `src/Root.tsx` — регистрация. Пропсы генерятся пайплайном; в репо лежат `props/*.example.json` для запуска Studio из коробки. Новое видео = новый `main169_*.json` + своя `<Composition>` в Root.tsx (id без `_`); b-roll видео — в подпапку `public/inserts/<id>/`, в `inserts.json` путь `<id>/файл`
 - `remotion/public/` — сюда кладёшь `source.mp4` (прокси исходника) + опц. `source_preview.mp4` (all-intra превью), declick-дорожку, шрифт, key.wav (звук клавиши). Все `*.wav`/прокси — в .gitignore
 - `work/<id>/` — артефакты по каждому видео (в git не попадают): script.md (если видео с нуля), words.json, delete.json, edl.json, faces.json, accents.json, REVIEW.md, inserts_prompts.md + animate_prompts.md (от broll-gen), animate/ (mp4 от пользователя на подхват), ref.json + ref_plan.md + ref/ (разбор референса при ремейке), publish.md. `work/shorts-scripts/` — сценарии шортсов до записи
@@ -22,7 +22,7 @@
 - `docs/` — brandbook.md (шаблон стиля — задай свой через brand-intake), PIPELINE.md, REMOTION.md
 - `tests/` — смоук-тесты (без сети): `python tests\test_download.py`
 - `out/` — финальные рендеры (в git не попадают)
-- `.env` — DEEPGRAM_API_KEY; для ремейка по ссылке — SCRAPECREATORS_API_KEY, APIFY_TOKEN (не коммитится)
+- `.env` — всё необязательно (не коммитится): WHISPER_PROMPT/WHISPER_MODEL, YTDLP_COOKIES_BROWSER; платное по желанию — DEEPGRAM_API_KEY + TRANSCRIBE_ENGINE=deepgram, SCRAPECREATORS_API_KEY, APIFY_TOKEN
 
 ## Команды
 ```powershell
@@ -56,11 +56,11 @@ npx remotion render src/index.ts Main169 ../out/main169.mp4 --props=props/main16
 - Версии-пины: TypeScript 5.9.3 (7.x ломает Remotion), zod 4.3.6, mediapipe 0.10.21 (новее — нет `.solutions`).
 - `@remotion/media`: `<Video>` И `<Audio>` тримы (`trimBefore`/`trimAfter`) — в КАДРАХ, не секундах (секунды у `<Video>` → чёрный экран).
 - Remotion `id` композиции: только `a-z A-Z 0-9 - CJK`, **без `_`** (дефис — ок). Шортсы: id `Short-*`.
-- Шортсы (Shorts916): кроп 16:9→9:16 через `<Video>` шириной 3413px (заполняет высоту 1920) + `translateX(tx)` на центр лица (tx из shorts.py по faces.json). Субтитры — караоке капсом, акцентное слово акцентным цветом + панч-зум. Текст субтитров вычищается вручную (fixes в shorts.json), т.к. Deepgram врёт числа/слова.
+- Шортсы (Shorts916): кроп 16:9→9:16 через `<Video>` шириной 3413px (заполняет высоту 1920) + `translateX(tx)` на центр лица (tx из shorts.py по faces.json). Субтитры — караоке капсом, акцентное слово акцентным цветом + панч-зум. Текст субтитров вычищается вручную (fixes в shorts.json), т.к. распознавалка врёт числа/слова.
 - Исходники HEVC → обязательно прокси all-intra H.264 (`-crf 15 -g 1 -bf 0 -c:a copy`) в remotion/public.
 - Композиция всегда равна целевому разрешению (1920×1080 / 1080×1920) — иначе мыло.
 - Правка монтажа = правка `work/<id>/delete.json` → edl.py → props.py → **audio.py** (не руками в edl.json). audio.py зависит от сегментов — перезапускать после каждой правочной цепочки, иначе дорожка рассинхронится.
-- Deepgram filler_words не работает для русского — паразиты/дубли размечает Claude в delete.json.
+- Транскрибация — локальный Whisper (`transcribe.py`, по умолчанию `large-v3-turbo`); «эээ» и паразиты он часто не пишет или пишет как обычные слова — паразиты/дубли размечает Claude в delete.json. Имена и термины автора — в `--prompt`/`WHISPER_PROMPT`. Подробно — `docs/PIPELINE.md`, «Транскрибация».
 - Стиль текста в кадре — по `docs/brandbook.md` (задай свой бренд через `brand-intake` → `brand.config.json`).
 - PowerShell 5.1: без `&&`. Пути с пробелами/кириллицей — в кавычках.
 

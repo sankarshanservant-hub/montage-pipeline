@@ -2,14 +2,17 @@
 """Download a reference short by URL (Stage 2R entry step).
 
 Providers per platform, priority order (any error -> next one):
-  tiktok    : ScrapeCreators /v2/tiktok/video       -> Apify clockworks/tiktok-scraper
-  instagram : ScrapeCreators /v1/instagram/post     -> Apify apify/instagram-scraper
-  youtube   : Apify streamers/youtube-video-downloader -> Apify epctex/youtube-video-downloader
-              (ScrapeCreators has no video-file endpoint for YouTube, metadata only)
+  all       : yt-dlp (free, no key) — first for every platform
+  tiktok    : -> ScrapeCreators /v2/tiktok/video       -> Apify clockworks/tiktok-scraper
+  instagram : -> ScrapeCreators /v1/instagram/post     -> Apify apify/instagram-scraper
+  youtube   : -> Apify streamers/youtube-video-downloader -> Apify epctex/youtube-video-downloader
+Paid fallbacks are tried only when their key is in .env.
+Instagram often wants a logged-in session: YTDLP_COOKIES_BROWSER=safari|chrome|firefox in .env
+(yt-dlp reads cookies of that browser on this computer).
 
-Usage: python download.py <url> <work_dir> [--provider scrapecreators|apify]
+Usage: python download.py <url> <work_dir> [--provider ytdlp|scrapecreators|apify]
 Writes: <work_dir>/ref_source.mp4  (path printed to stdout)
-Keys (.env): SCRAPECREATORS_API_KEY, APIFY_TOKEN
+Keys (.env, optional): SCRAPECREATORS_API_KEY, APIFY_TOKEN
 """
 import argparse
 import json
@@ -126,7 +129,7 @@ def extract_apify_items(items: list, prefer: tuple = ()) -> str:
 def sc_get(path: str, url: str) -> dict:
     key = os.environ.get("SCRAPECREATORS_API_KEY")
     if not key:
-        raise ProviderError("нет SCRAPECREATORS_API_KEY в .env (E:\\Montage\\.env)")
+        raise ProviderError("нет SCRAPECREATORS_API_KEY в .env (платный запасной вариант, необязателен)")
     resp = requests.get(f"{SC_BASE}{path}", params={"url": url},
                         headers={"x-api-key": key}, timeout=120)
     if resp.status_code != 200:
@@ -137,7 +140,7 @@ def sc_get(path: str, url: str) -> dict:
 def apify_run(actor: str, payload: dict) -> list:
     token = os.environ.get("APIFY_TOKEN")
     if not token:
-        raise ProviderError("нет APIFY_TOKEN в .env (E:\\Montage\\.env)")
+        raise ProviderError("нет APIFY_TOKEN в .env (платный запасной вариант, необязателен)")
     resp = requests.post(
         f"{APIFY_BASE}/acts/{actor}/run-sync-get-dataset-items",
         params={"token": token}, json=payload, timeout=SYNC_TIMEOUT_S + 30)
@@ -150,7 +153,26 @@ def apify_run(actor: str, payload: dict) -> list:
     return resp.json()
 
 
-# --- провайдеры (возвращают прямую ссылку на видеофайл) ---
+# --- провайдеры (возвращают прямую ссылку на видеофайл; yt-dlp качает сам и возвращает None) ---
+
+def p_ytdlp(url: str, dest: Path) -> None:
+    cmd = [sys.executable, "-m", "yt_dlp", "--no-playlist", "--no-progress",
+           "-f", "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b",
+           "--merge-output-format", "mp4", "--force-overwrites", "-o", str(dest), url]
+    browser = os.environ.get("YTDLP_COOKIES_BROWSER")
+    if browser:
+        cmd[3:3] = ["--cookies-from-browser", browser]
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                          errors="replace")
+    if proc.returncode != 0:
+        tail = (proc.stderr or proc.stdout).strip().splitlines()[-3:]
+        err = " ".join(tail).lower()
+        hint = (" — нужен вход: добавь YTDLP_COOKIES_BROWSER=safari (или chrome) в .env и войди"
+                " на этом сайте в этом браузере"
+                if any(k in err for k in ("sign in", "login", "cookies", "rate-limit")) else "")
+        raise ProviderError("yt-dlp: " + " | ".join(tail) + hint)
+
 
 def p_sc_tiktok(url: str) -> str:
     return extract_sc_tiktok(sc_get("/v2/tiktok/video", url))
@@ -186,9 +208,9 @@ def p_apify_youtube_epctex(url: str) -> str:
 
 
 REGISTRY = {
-    "tiktok": [("scrapecreators", p_sc_tiktok), ("apify", p_apify_tiktok)],
-    "instagram": [("scrapecreators", p_sc_instagram), ("apify", p_apify_instagram)],
-    "youtube": [("apify", p_apify_youtube_streamers), ("apify", p_apify_youtube_epctex)],
+    "tiktok": [("ytdlp", p_ytdlp), ("scrapecreators", p_sc_tiktok), ("apify", p_apify_tiktok)],
+    "instagram": [("ytdlp", p_ytdlp), ("scrapecreators", p_sc_instagram), ("apify", p_apify_instagram)],
+    "youtube": [("ytdlp", p_ytdlp), ("apify", p_apify_youtube_streamers), ("apify", p_apify_youtube_epctex)],
 }
 
 
@@ -228,7 +250,7 @@ def main():
         description="Скачивание референс-шортса по ссылке (Stage 2R)")
     ap.add_argument("url")
     ap.add_argument("work_dir")
-    ap.add_argument("--provider", choices=["scrapecreators", "apify"],
+    ap.add_argument("--provider", choices=["ytdlp", "scrapecreators", "apify"],
                     help="форс конкретного провайдера (тест фолбэк-ветки)")
     args = ap.parse_args()
 
@@ -241,15 +263,18 @@ def main():
         chain = [(n, fn) for n, fn in chain if n == args.provider]
         if not chain:
             sys.exit(f"для {platform} нет провайдера {args.provider} "
-                     "(YouTube качается только через Apify)")
+                     "(для YouTube: ytdlp или apify)")
 
     dest = Path(args.work_dir) / "ref_source.mp4"
     errors = []
     for name, fn in chain:
         try:
             print(f"[{platform}] пробую {name}…")
-            direct_url = fn(args.url)
-            download_file(direct_url, dest)  # ссылки протухают за часы — качаем сразу
+            if name == "ytdlp":
+                fn(args.url, dest)
+            else:
+                direct_url = fn(args.url)
+                download_file(direct_url, dest)  # ссылки протухают за часы — качаем сразу
             validate(dest)
             print(f"OK: {dest} ({dest.stat().st_size // 1024} KB, провайдер {name})")
             print(f"дальше: E:\\Montage\\.venv\\Scripts\\python.exe "

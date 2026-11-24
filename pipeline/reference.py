@@ -4,8 +4,8 @@
 Face presence is sampled with MediaPipe every `step` seconds (default 0.25 —
 finer than the requested 0.5 s), scene cuts come from ffmpeg scdet; combined
 they yield author/visual segments. Visual fragments are exported as all-intra
-clips ready to become inserts; the transcript (Deepgram, optional — skipped
-without DEEPGRAM_API_KEY) is attached per segment.
+clips ready to become inserts; the transcript (transcribe.py — local Whisper by
+default; skipped on any error) is attached per segment.
 
 Usage:
   python reference.py <video> <work_dir> [step_seconds]
