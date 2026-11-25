@@ -10,7 +10,7 @@
 Исходники — файлы из Dropbox (папки «Лучшие»), имена как в Dropbox
 («Video 31-10-26, 17 00 53.mov») или короткие («31-10_17-00-53.mov»).
 У всех исходников ошибочная метка поворота −90°: изображение в файле уже горизонтальное,
-метка игнорируется (-noautorotate), картинка не поворачивается.
+метка снимается на входе (-display_rotation 0), картинка не поворачивается.
 
 Выход: <out>/dialogue_flow.mp4 (+ edit_list.md — монтажный лист с фактическими таймкодами).
 """
@@ -46,7 +46,8 @@ GRADE = {
 # пропорционально предпочтительной длине, но не дальше конца годного куска (max).
 # pos: место надписи — "bl" низ-слева, "br" низ-справа, "tl" верх-слева, "tr" верх-справа.
 BLOCKS = [
-    dict(n=1, clips=[("31-10 17 00 53", 3.9, 5.2, 9.1, "neutral")],
+    dict(n=1, clips=[("31-10 17 00 53", 3.9, 1.6, 5.5, "neutral"),   # с 5,5 с в кадр входит рука
+                     ("31-10 16 58 01", 0.3, 2.6, 5.3, "neutral")],
          texts=[("We all hunger for\nheart-to-heart conversations.", "bl")]),
     dict(n=2, clips=[("31-10 17 36 36", 0.4, 6.0, 15.6, "cool"),
                      ("31-10 17 44 10", 4.2, 4.8, 10.0, "cool")],
@@ -161,7 +162,7 @@ def text_png(text: str, where: str, out: Path):
         font = ImageFont.truetype(str(FONT_TITLE), 92)
         tw = ImageDraw.Draw(img).textbbox((0, 0), text, font=font)
         w, h = tw[2] - tw[0], tw[3] - tw[1]
-        x, y = (W - w) // 2, int(H * 0.40) - h // 2 - tw[1]
+        x, y = (W - w) // 2, int(H * 0.80) - h // 2 - tw[1]   # внизу: не на лицах
         box = (x - 120, y - 70, x + w + 120, y + h + 90)
         lines_xy = [(x, y, text)]
         spacing = 0
@@ -219,11 +220,11 @@ def build(src: Path, out: Path, music: Path | None, draft: bool):
         f = out / "seg" / f"{i:02d}.mp4"
         s["file"] = f
         vf = (f"scale={W}:{H}:flags=lanczos,fps={FPS},{GRADE[s['grade']]},format=yuv420p")
-        sig = f"{s['key']}|{s['tin']:.3f}|{s['frames']}|{vf}|{crf}"
+        sig = f"rot0|{s['key']}|{s['tin']:.3f}|{s['frames']}|{vf}|{crf}"
         meta = f.with_suffix(".sig")
         if f.exists() and meta.exists() and meta.read_text() == sig:
             continue
-        run(["ffmpeg", "-v", "error", "-y", "-noautorotate", "-ss", f"{s['tin']:.3f}",
+        run(["ffmpeg", "-v", "error", "-y", "-display_rotation:v:0", "0", "-ss", f"{s['tin']:.3f}",
              "-i", str(src_path(src, s["key"])), "-map", "0:v:0", "-frames:v", str(s["frames"]),
              "-vf", vf, "-c:v", "libx264", "-preset", "fast" if draft else "slow", "-crf", crf,
              "-an", str(f)])
