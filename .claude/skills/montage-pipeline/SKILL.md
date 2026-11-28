@@ -97,6 +97,13 @@ Stage 3 (Studio) и Stage 4 (render `Short-*` по явной команде).
 (16:9) and `Short-*` (9:16). Preview is NEVER a file render. Edits loop back:
 `delete.json` → `edl.py` → `props.py` → **`audio.py`** (rerun audio every time).
 
+**Stage 3.5 — Director's gate (перед показом человеку любого собранного ролика).** Прочитать `docs/DIRECTING.md`.
+До выбора кадров: STORYBOARD.md (проблема / аудитория / цель / эмоция, бюджет важности, кривая энергии с пиком на 60–75 %).
+После сборки: `python3 tools/film_check.py <mp4> --music <трек>` → `bash tools/contact_sheet.sh` → свежий критик (отдельный
+агент по промпту из DIRECTING.md §8, без твоих рассуждений) → 3 главные правки → пересборка → `work/<id>/LEDGER.md`.
+Подгонка: `tools/beat_snap.py` (склейки на доли), `tools/fit_music.py` (настоящий конец трека на конце ролика).
+Не показывать ролик, который не просмотрен целиком в движении; в отчёте честно указывать, что проверено цифрами, глазами и что не слушалось.
+
 **Stage 4 — Final render (only on explicit user command).** High quality:
 `npx remotion render src/index.ts Main169 ../out/main169.mp4 --props=props/main169.json --image-format=png --crf=14 --x264-preset=slow`.
 Long job → run in background with a completion notice; watch by output-file growth, not by
